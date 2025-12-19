@@ -27,7 +27,7 @@ body {
 
 h1 { text-align: center; margin-top: 0; }
 
-textarea {
+textarea, input[type="number"] {
   width: 100%;
   background: #0f0f14;
   color: #fff;
@@ -35,8 +35,9 @@ textarea {
   border-radius: 8px;
   padding: 10px;
   font-size: 16px;
-  resize: vertical;
 }
+
+textarea { resize: vertical; }
 
 .colors {
   display: flex;
@@ -45,9 +46,7 @@ textarea {
   margin: 12px 0;
 }
 
-.colors input[type="color"] {
-  display: none;
-}
+.colors input[type="color"] { display: none; }
 
 .color-btn {
   width: 70px;
@@ -60,16 +59,11 @@ textarea {
   color: #fff;
   text-align: center;
   line-height: 40px;
-  transition: transform 0.2s;
   text-shadow:
     -1px -1px 0 #000,
      1px -1px 0 #000,
     -1px  1px 0 #000,
      1px  1px 0 #000;
-}
-
-.color-btn:hover {
-  transform: scale(1.05);
 }
 
 .controls {
@@ -107,10 +101,11 @@ button {
   margin-top: 12px;
 }
 
-.output { margin-top: 16px; }
-.output textarea { min-height: 120px; font-family: monospace; }
-
-.hint { text-align: center; font-size: 13px; color: #aaa; margin-top: 8px; }
+.output textarea {
+  min-height: 120px;
+  font-family: monospace;
+  margin-top: 12px;
+}
 </style>
 </head>
 <body>
@@ -127,25 +122,26 @@ button {
   <button onclick="removeColor()" class="linear-btn">Farbe löschen</button>
 </div>
 
-<button onclick="toggleBold()" id="toggleBtn" class="toggle-btn">
-  &l AN
-</button>
+<input type="number" id="step" min="1" value="1"
+placeholder="Farbabstand (1 = jeder Buchstabe)" oninput="generate()">
 
+<button onclick="toggleBold()" id="toggleBtn" class="toggle-btn">&l AN</button>
 <button onclick="generate()" class="rainbow-btn">Verlauf erstellen</button>
 
 <div class="output">
   <textarea id="output" placeholder="Fertiger Text zum Kopieren..."></textarea>
 </div>
-
-<div class="hint">
-Format: &amp;HEX + (optional &amp;l) + Buchstabe
-</div>
 </div>
 
 <script>
 const pickerContainer = document.getElementById('colorPickers');
+const input = document.getElementById('input');
+const output = document.getElementById('output');
+const stepInput = document.getElementById('step');
+const toggleBtn = document.getElementById('toggleBtn');
+
 const defaultColors = ['#00D2FF', '#FFFFFF'];
-let useBold = true; // &l AN/AUS
+let useBold = true;
 
 function createPickers() {
   pickerContainer.innerHTML = '';
@@ -156,43 +152,43 @@ function addPicker(color) {
   if (pickerContainer.children.length >= 10) return;
 
   const wrapper = document.createElement('div');
-  const input = document.createElement('input');
-  input.type = 'color';
-  input.value = color;
+  const inputColor = document.createElement('input');
+  inputColor.type = 'color';
+  inputColor.value = color;
 
   const btn = document.createElement('div');
   btn.className = 'color-btn';
   btn.style.background = color;
   btn.textContent = color.toUpperCase();
 
-  btn.onclick = () => input.click();
-  input.oninput = () => {
-    btn.style.background = input.value;
-    btn.textContent = input.value.toUpperCase();
+  btn.onclick = () => inputColor.click();
+  inputColor.oninput = () => {
+    btn.style.background = inputColor.value;
+    btn.textContent = inputColor.value.toUpperCase();
     generate();
   };
 
-  wrapper.appendChild(input);
+  wrapper.appendChild(inputColor);
   wrapper.appendChild(btn);
   pickerContainer.appendChild(wrapper);
 }
 
-function addColor() { addPicker('#FFFFFF'); generate(); }
-function removeColor() {
+function addColor(){ addPicker('#FFFFFF'); generate(); }
+function removeColor(){
   if (pickerContainer.children.length <= 2) return;
   pickerContainer.removeChild(pickerContainer.lastChild);
   generate();
 }
 
-function toggleBold() {
+function toggleBold(){
   useBold = !useBold;
-  document.getElementById('toggleBtn').innerHTML = useBold ? '&l AN' : '&l AUS';
+  toggleBtn.innerHTML = useBold ? '&l AN' : '&l AUS';
   generate();
 }
 
 createPickers();
 
-function lerp(a,b,t){return a+(b-a)*t;}
+function lerp(a,b,t){ return a+(b-a)*t; }
 function hexToRgb(hex){
   const n=parseInt(hex.slice(1),16);
   return[(n>>16)&255,(n>>8)&255,n&255];
@@ -201,35 +197,45 @@ function toHex(v){
   return Math.round(v).toString(16).padStart(2,'0').toUpperCase();
 }
 
-function generate() {
-  const text = document.getElementById('input').value;
+function generate(){
+  const text = input.value;
+  const step = Math.max(1, parseInt(stepInput.value) || 1);
   const chars = [...text].filter(c => c !== ' ');
   const colors = [...pickerContainer.querySelectorAll('input')].map(i => i.value);
   if (colors.length < 2) return;
 
   let result = '';
-  let index = 0;
+  let colorIndex = 0;
+  let count = 0;
+  let lastHex = null;
 
   for (let char of text) {
-    if (char === ' ') { result += ' '; continue; }
+    if (char === ' ') {
+      result += ' ';
+      continue;
+    }
 
-    const t = index / Math.max(chars.length - 1,1);
+    const t = colorIndex / Math.max(Math.ceil(chars.length / step) - 1, 1);
     const seg = Math.min(Math.floor(t * (colors.length - 1)), colors.length - 2);
-    const localT = (t - seg/(colors.length-1)) * (colors.length-1);
+    const localT = (t - seg / (colors.length - 1)) * (colors.length - 1);
 
     const [r1,g1,b1] = hexToRgb(colors[seg]);
     const [r2,g2,b2] = hexToRgb(colors[seg+1]);
 
     const hex = `#${toHex(lerp(r1,r2,localT))}${toHex(lerp(g1,g2,localT))}${toHex(lerp(b1,b2,localT))}`;
 
-    result += useBold
-      ? `&${hex}&l${char}`
-      : `&${hex}${char}`;
+    if (hex !== lastHex) {
+      result += useBold ? `&${hex}&l${char}` : `&${hex}${char}`;
+      lastHex = hex;
+    } else {
+      result += char;
+    }
 
-    index++;
+    count++;
+    if (count % step === 0) colorIndex++;
   }
 
-  document.getElementById('output').value = result;
+  output.value = result;
 }
 </script>
 
